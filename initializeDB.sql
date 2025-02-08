@@ -27,15 +27,14 @@ CREATE TABLE IF NOT EXISTS users (
 -- Stores ideas and their association with users and branches
 CREATE TABLE IF NOT EXISTS ideas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
+    title TEXT NOT NULL UNIQUE,
     description TEXT NOT NULL,
     category TEXT NOT NULL, -- Example: 'Renewable Energy', 'Urban Development'
-    author_id INTEGER NOT NULL, -- Link to the user who submitted the idea
-    location_id INTEGER NOT NULL, -- Link to a branch in the locations table
-    votes INTEGER DEFAULT 0,
+    location_id INTEGER, -- Link to a branch in the locations table
     status TEXT CHECK(status IN ('pending', 'approved', 'rejected', 'in-progress', 'completed')) DEFAULT 'pending',
+    created_by INTEGER NOT NULL, -- Link to the user who created the idea
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (location_id) REFERENCES locations (id) ON DELETE CASCADE
 );
 
@@ -88,17 +87,17 @@ CREATE TABLE IF NOT EXISTS incentives (
 );
 
 -- Audit Table
--- Tracks changes made to ideas
+-- Tracks changes made to all tables in the system
 CREATE TABLE IF NOT EXISTS audit (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    idea_id INTEGER NOT NULL, -- Link to the idea being audited
-    changed_by INTEGER NOT NULL, -- Link to the user who made the change
-    change_type TEXT CHECK(change_type IN ('status_update', 'edit', 'delete')) NOT NULL, -- Type of change
-    old_value TEXT, -- Previous value before change
-    new_value TEXT, -- Updated value after change
+    table_name TEXT NOT NULL, -- The table where the change occurred
+    record_id INTEGER NOT NULL, -- The ID of the affected record
+    changed_by INTEGER, -- User who made the change
+    change_type TEXT CHECK(change_type IN ('INSERT', 'UPDATE', 'DELETE')) NOT NULL, -- Type of change
+    old_value TEXT, -- Previous value before change (for updates & deletes)
+    new_value TEXT, -- Updated value after change (for inserts & updates)
     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (idea_id) REFERENCES ideas (id) ON DELETE CASCADE,
-    FOREIGN KEY (changed_by) REFERENCES users (id) ON DELETE CASCADE
+    FOREIGN KEY (changed_by) REFERENCES users (id) ON DELETE SET NULL
 );
 
 -- Notifications Table
@@ -142,4 +141,52 @@ BEGIN
     UPDATE locations
     SET location_code = 'B-' || (SELECT COUNT(*) FROM locations WHERE type = 'branch')
     WHERE id = NEW.id AND NEW.type = 'branch';
+END;
+
+DROP TRIGGER IF EXISTS audit_ideas_insert;
+
+-- Track UPDATEs on ideas table
+DROP TRIGGER IF EXISTS audit_ideas_update;
+CREATE TRIGGER audit_ideas_update
+AFTER UPDATE ON ideas
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit (table_name, record_id, changed_by, change_type, old_value, new_value)
+    VALUES ('ideas', OLD.id, OLD.created_by, 'UPDATE',
+            json_object('title', OLD.title, 'description', OLD.description, 'category', OLD.category, 'status', OLD.status),
+            json_object('title', NEW.title, 'description', NEW.description, 'category', NEW.category, 'status', NEW.status));
+END;
+
+-- Track DELETEs on ideas table
+DROP TRIGGER IF EXISTS audit_ideas_delete;
+CREATE TRIGGER audit_ideas_delete
+AFTER DELETE ON ideas
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit (table_name, record_id, changed_by, change_type, old_value)
+    VALUES ('ideas', OLD.id, OLD.created_by, 'DELETE',
+            json_object('title', OLD.title, 'description', OLD.description, 'category', OLD.category, 'status', OLD.status));
+END;
+
+-- Track UPDATEs on users table
+DROP TRIGGER IF EXISTS audit_users_update;
+CREATE TRIGGER audit_users_update
+AFTER UPDATE ON users
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit (table_name, record_id, changed_by, change_type, old_value, new_value)
+    VALUES ('users', OLD.id, OLD.id, 'UPDATE',
+            json_object('name', OLD.name, 'email', OLD.email, 'role', OLD.role, 'location_id', OLD.location_id),
+            json_object('name', NEW.name, 'email', NEW.email, 'role', NEW.role, 'location_id', NEW.location_id));
+END;
+
+-- Track DELETEs on users table
+DROP TRIGGER IF EXISTS audit_users_delete;
+CREATE TRIGGER audit_users_delete
+AFTER DELETE ON users
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit (table_name, record_id, changed_by, change_type, old_value)
+    VALUES ('users', OLD.id, OLD.id, 'DELETE',
+            json_object('name', OLD.name, 'email', OLD.email, 'role', OLD.role, 'location_id', OLD.location_id));
 END;

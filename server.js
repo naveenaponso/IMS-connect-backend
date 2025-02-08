@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 
 const userRoutes = require('./routes/userRoutes');
 const locationRoutes = require('./routes/locationRoutes');
+const ideaRoutes = require('./routes/ideaRoutes');
 
 const fs = require('fs');
 const path = require('path');
@@ -36,6 +37,8 @@ initializeDatabase()
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/api/locations', locationRoutes);
+app.use("/api/ideas", ideaRoutes);
+
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
