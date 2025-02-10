@@ -1,3 +1,18 @@
+-- HR Table
+CREATE TABLE IF NOT EXISTS hr_employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    role TEXT CHECK(role IN ('manager', 'employee','admin')) NOT NULL,
+    location_id INTEGER NOT NULL, -- Links to locations table
+    birthdate DATE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    phone TEXT UNIQUE NOT NULL,
+    salary REAL NOT NULL,
+    hire_date DATE DEFAULT CURRENT_DATE, -- Date when employee joined
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+);
+
 -- Locations Table
 -- Represents hierarchical data for regions, countries, and branches
 CREATE TABLE IF NOT EXISTS locations (
@@ -66,14 +81,16 @@ CREATE TABLE IF NOT EXISTS comments (
 -- Tracks collaboration teams for ideas
 CREATE TABLE IF NOT EXISTS collaborations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    idea_id INTEGER NOT NULL, -- Link to the idea being worked on
-    user_id INTEGER NOT NULL, -- Link to the user in the team
-    role TEXT, -- Example: 'team lead', 'contributor'
-    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (idea_id) REFERENCES ideas (id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-    UNIQUE (idea_id, user_id) -- Prevent duplicate assignments
+    idea_id INTEGER NOT NULL,  -- The idea being worked on
+    user_id INTEGER NOT NULL,  -- The assigned employee
+    role TEXT NOT NULL CHECK(role IN ('Team Lead', 'Contributor')),  -- Team role
+    status TEXT DEFAULT 'active' CHECK(status IN ('active', 'completed', 'removed')),  -- Collaboration status
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- When the user was assigned
+    FOREIGN KEY (idea_id) REFERENCES ideas(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE (idea_id, user_id)  -- Prevent duplicate assignments
 );
+
 
 -- Incentives Table
 -- Tracks points or rewards for users
@@ -120,44 +137,32 @@ CREATE TABLE IF NOT EXISTS system_settings (
 );
 
 
--- Trigger to add location code
-DROP TRIGGER IF EXISTS generate_location_code;
-
-CREATE TRIGGER generate_location_code
-AFTER INSERT ON locations
-FOR EACH ROW
-BEGIN
-    -- Assign location_code for regions
-    UPDATE locations
-    SET location_code = 'R-' || (SELECT COUNT(*) FROM locations WHERE type = 'region')
-    WHERE id = NEW.id AND NEW.type = 'region';
-
-    -- Assign location_code for countries
-    UPDATE locations
-    SET location_code = 'C-' || (SELECT COUNT(*) FROM locations WHERE type = 'country')
-    WHERE id = NEW.id AND NEW.type = 'country';
-
-    -- Assign location_code for branches
-    UPDATE locations
-    SET location_code = 'B-' || (SELECT COUNT(*) FROM locations WHERE type = 'branch')
-    WHERE id = NEW.id AND NEW.type = 'branch';
-END;
-
-DROP TRIGGER IF EXISTS audit_ideas_insert;
-
--- Track UPDATEs on ideas table
+-- triggers to record audit alerts
 DROP TRIGGER IF EXISTS audit_ideas_update;
 CREATE TRIGGER audit_ideas_update
 AFTER UPDATE ON ideas
 FOR EACH ROW
 BEGIN
     INSERT INTO audit (table_name, record_id, changed_by, change_type, old_value, new_value)
-    VALUES ('ideas', OLD.id, OLD.created_by, 'UPDATE',
-            json_object('title', OLD.title, 'description', OLD.description, 'category', OLD.category, 'status', OLD.status),
-            json_object('title', NEW.title, 'description', NEW.description, 'category', NEW.category, 'status', NEW.status));
+    SELECT 'ideas', OLD.id, OLD.created_by, 'UPDATE',
+           json_object(
+               'title', CASE WHEN OLD.title != NEW.title THEN OLD.title ELSE NULL END,
+               'description', CASE WHEN OLD.description != NEW.description THEN OLD.description ELSE NULL END,
+               'category', CASE WHEN OLD.category != NEW.category THEN OLD.category ELSE NULL END,
+               'status', CASE WHEN OLD.status != NEW.status THEN OLD.status ELSE NULL END
+           ),
+           json_object(
+               'title', CASE WHEN OLD.title != NEW.title THEN NEW.title ELSE NULL END,
+               'description', CASE WHEN OLD.description != NEW.description THEN NEW.description ELSE NULL END,
+               'category', CASE WHEN OLD.category != NEW.category THEN NEW.category ELSE NULL END,
+               'status', CASE WHEN OLD.status != NEW.status THEN NEW.status ELSE NULL END
+           )
+    WHERE OLD.title != NEW.title
+       OR OLD.description != NEW.description
+       OR OLD.category != NEW.category
+       OR OLD.status != NEW.status;
 END;
 
--- Track DELETEs on ideas table
 DROP TRIGGER IF EXISTS audit_ideas_delete;
 CREATE TRIGGER audit_ideas_delete
 AFTER DELETE ON ideas
@@ -168,19 +173,31 @@ BEGIN
             json_object('title', OLD.title, 'description', OLD.description, 'category', OLD.category, 'status', OLD.status));
 END;
 
--- Track UPDATEs on users table
 DROP TRIGGER IF EXISTS audit_users_update;
 CREATE TRIGGER audit_users_update
 AFTER UPDATE ON users
 FOR EACH ROW
 BEGIN
     INSERT INTO audit (table_name, record_id, changed_by, change_type, old_value, new_value)
-    VALUES ('users', OLD.id, OLD.id, 'UPDATE',
-            json_object('name', OLD.name, 'email', OLD.email, 'role', OLD.role, 'location_id', OLD.location_id),
-            json_object('name', NEW.name, 'email', NEW.email, 'role', NEW.role, 'location_id', NEW.location_id));
+    SELECT 'users', OLD.id, OLD.id, 'UPDATE',
+           json_object(
+               'name', CASE WHEN OLD.name != NEW.name THEN OLD.name ELSE NULL END,
+               'email', CASE WHEN OLD.email != NEW.email THEN OLD.email ELSE NULL END,
+               'role', CASE WHEN OLD.role != NEW.role THEN OLD.role ELSE NULL END,
+               'location_id', CASE WHEN OLD.location_id != NEW.location_id THEN OLD.location_id ELSE NULL END
+           ),
+           json_object(
+               'name', CASE WHEN OLD.name != NEW.name THEN NEW.name ELSE NULL END,
+               'email', CASE WHEN OLD.email != NEW.email THEN NEW.email ELSE NULL END,
+               'role', CASE WHEN OLD.role != NEW.role THEN NEW.role ELSE NULL END,
+               'location_id', CASE WHEN OLD.location_id != NEW.location_id THEN NEW.location_id ELSE NULL END
+           )
+    WHERE OLD.name != NEW.name
+       OR OLD.email != NEW.email
+       OR OLD.role != NEW.role
+       OR OLD.location_id != NEW.location_id;
 END;
 
--- Track DELETEs on users table
 DROP TRIGGER IF EXISTS audit_users_delete;
 CREATE TRIGGER audit_users_delete
 AFTER DELETE ON users

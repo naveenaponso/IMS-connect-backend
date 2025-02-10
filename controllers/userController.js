@@ -6,22 +6,26 @@ const SECRET_KEY = 'IMS-12345'; // Replace with a secure key
 
 // Register a new user
 exports.register = async (req, res) => {
-    const { name, email, password, role, location_id } = req.body;
+    const { name, email, password } = req.body;
     try {
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        userModel.createUser({ name, email, password: hashedPassword, role, location_id }, (err, user) => {
+        userModel.createUser({ name, email, password: hashedPassword }, (err, user) => {
             if (err) {
-                if (err.code === 'SQLITE_CONSTRAINT') {
-                    return res.status(400).json({ message:'Error while creating a user ', error: err });
+                if (err.message === "Email not found in HR system") {
+                    return res.status(400).json({ message: "Email not found in the HR system." });
                 }
-                return res.status(500).json({ message: 'Database error', error: err });
+                if (err.message.includes('UNIQUE constraint failed')) {
+                    return res.status(400).json({ message: "Email already registered" });
+                }
+
+                return res.status(500).json({ message: "Database error", error: err.message });
             }
-            res.status(201).json({ message: 'User registered successfully' });
+            res.status(201).json({ message: "User registered successfully", user });
         });
     } catch (error) {
-        res.status(500).json({ message: 'Internal server error', error });
+        res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
 
@@ -52,7 +56,7 @@ exports.login = async (req, res) => {
 exports.getProfile = (req, res) => {
     const userId = req.user.id;
     userModel.findUserById(userId, (err, user) => {
-        if (err || !user) {
+        if (err) {
             return res.status(404).json({ message: 'User not found' });
         }
         res.json({ user });
