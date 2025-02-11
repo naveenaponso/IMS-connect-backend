@@ -9,7 +9,7 @@ exports.getApprovedIdeas = (callback) => {
         users.name AS author_name
         FROM ideas
         LEFT JOIN users ON ideas.created_by = users.id 
-        WHERE status = 'approved'`,
+        WHERE status != 'pending'`,
         [],
         (err, rows) => {
             callback(err, rows);

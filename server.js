@@ -6,6 +6,8 @@ const userRoutes = require('./routes/userRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const ideaRoutes = require('./routes/ideaRoutes');
 const collaborationRoutes = require("./routes/collaborationRoutes");
+const reportRoutes = require("./routes/reportRoutes");
+const incentiveRoutes = require("./routes/incentiveRoutes");
 
 const fs = require('fs');
 const path = require('path');
@@ -40,7 +42,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/locations', locationRoutes);
 app.use("/api/ideas", ideaRoutes);
 app.use("/api/collaborations", collaborationRoutes);
-
+app.use("/api/reports", reportRoutes);
+app.use("/api/incentives", incentiveRoutes);
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

@@ -43,3 +43,10 @@ VALUES
     ('David White', 'admin', 18, '2000-11-05', 'david.white@example.com', '1234567893', 20000),
     ('John Doe', 'employee', 19, '1988-07-30','john.doe@example.com', '0087456321', 55000)
     ;
+
+
+INSERT INTO system_settings (setting_key, setting_value) VALUES 
+    ('points_per_idea_submission', '10'),
+    ('points_per_vote', '2'),
+    ('points_per_comment', '3'),
+    ('points_per_collaboration', '5');

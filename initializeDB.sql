@@ -207,3 +207,57 @@ BEGIN
     VALUES ('users', OLD.id, OLD.id, 'DELETE',
             json_object('name', OLD.name, 'email', OLD.email, 'role', OLD.role, 'location_id', OLD.location_id));
 END;
+
+
+-- triggers to record incentives
+DROP TRIGGER IF EXISTS after_idea_submission;
+CREATE TRIGGER after_idea_submission
+AFTER INSERT ON ideas
+FOR EACH ROW
+BEGIN
+    INSERT INTO incentives (user_id, points, description)
+    VALUES (
+        NEW.created_by,
+        (SELECT setting_value FROM system_settings WHERE setting_key = 'points_per_idea_submission'),
+        'Submitted an idea'
+    );
+END;
+
+DROP TRIGGER IF EXISTS after_vote_cast;
+CREATE TRIGGER after_vote_cast
+AFTER INSERT ON votes
+FOR EACH ROW
+BEGIN
+    INSERT INTO incentives (user_id, points, description)
+    VALUES (
+        NEW.user_id,
+        (SELECT setting_value FROM system_settings WHERE setting_key = 'points_per_vote'),
+        'Voted on an idea'
+    );
+END;
+
+DROP TRIGGER IF EXISTS after_comment_added;
+CREATE TRIGGER after_comment_added
+AFTER INSERT ON comments
+FOR EACH ROW
+BEGIN
+    INSERT INTO incentives (user_id, points, description)
+    VALUES (
+        NEW.user_id,
+        (SELECT setting_value FROM system_settings WHERE setting_key = 'points_per_comment'),
+        'Commented on an idea'
+    );
+END;
+
+DROP TRIGGER IF EXISTS after_collaboration_assigned;
+CREATE TRIGGER after_collaboration_assigned
+AFTER INSERT ON collaborations
+FOR EACH ROW
+BEGIN
+    INSERT INTO incentives (user_id, points, description)
+    VALUES (
+        NEW.user_id,
+        (SELECT setting_value FROM system_settings WHERE setting_key = 'points_per_collaboration'),
+        'Collaborated on an idea'
+    );
+END;
